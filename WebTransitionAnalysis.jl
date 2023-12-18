@@ -1,7 +1,7 @@
-using Distributions,StatsPlots, Turing
+using Distributions,StatsPlots, Turing, DataFrames
 
 @model function webpanel(xs,ys)
-	lp ~ Beta(2,2)
+	lpgo ~ Beta(2,2)
 	entry ~ Beta(2,2)
 	entry_input ~ Beta(2,2)
 	entry_confirm ~ Beta(2,2)
@@ -11,13 +11,13 @@ using Distributions,StatsPlots, Turing
 	entry_select ~ Beta(2,2)
 
 #	for i = 2:length(xs1)
-	xs[2] ~ Normal(xs[1] * lp * pass[1], s)
+	xs[2] ~ Normal(xs[1] * lpgo * pass[1], s)
 	xs[3] ~ Normal(xs[2] * entry * pass[2], s)
 	xs[4] ~ Normal(xs[3] * entry_input * pass[3], s)
 	xs[5] ~ Normal(xs[4] * entry_confirm * pass[4], s)
 	xs[6] ~ Normal(xs[5] * payment * pass[5],s)
 
-	ys[2] ~ Normal(ys[1] * lp * pass[1], s)
+	ys[2] ~ Normal(ys[1] * lpgo * pass[1], s)
 	ys[3] ~ Normal(ys[2] * entry_select * pass[2], s)
 	ys[4] ~ Normal(ys[3] * entry * pass[3], s)
 	ys[5] ~ Normal(ys[4] * entry_input * pass[4], s)
@@ -27,7 +27,7 @@ end
 
 begin
     xs = [475_976, 106_555, 30_569, 25_556, 19_453, 7_383]
-    ys = [39_391, 8_423, 2_429, 941, 764,625,542,342]
+    ys = [39_391, 8_423, 2_429, 941, 764,625,542 ] #,342]
 end
 
 model=webpanel(xs,ys)
@@ -76,3 +76,41 @@ Quantiles
               s   52.8711   58.0312   60.8679   63.9855   70.1527
    entry_select    0.3794    0.4164    0.4405    0.4625    0.5025
 """
+
+ps = get(c, [:lpgo, :entry, :entry_input, :entry_confirm, :payment, :entry_select,:pass]) |> 
+      t->(; lp=mean(t.lpgo),
+            entry=mean(t.entry), 
+            entry_input=mean(t.entry_input), 
+            entry_confirm=mean(t.entry_confirm), 
+            payment=mean(t.payment),
+            entry_select=mean(t.entry_select),
+            pass = [mean(y) for y in t.pass] )
+
+function reconstruct_1(x0, ps)
+      rs = zeros(6)
+      rs[1] = x0
+      rs[2] = rs[1] * ps.lp * ps.pass[1]
+	rs[3] = rs[2] * ps.entry * ps.pass[2]
+	rs[4] = rs[3] * ps.entry_input * ps.pass[3]
+	rs[5] = rs[4] * ps.entry_confirm * ps.pass[4]
+	rs[6] = rs[5] * ps.payment * ps.pass[5]
+      return rs      
+end
+
+function reconstruct_2(y0, ps)
+      rs = zeros(7)
+      rs[1] = y0
+      rs[2] = rs[1] * ps.lp * ps.pass[1]
+      rs[3] = rs[2] * ps.entry_select * ps.pass[2]
+	rs[4] = rs[3] * ps.entry * ps.pass[3]
+	rs[5] = rs[4] * ps.entry_input * ps.pass[4]
+	rs[6] = rs[5] * ps.entry_confirm * ps.pass[5]
+	rs[7] = rs[6] * ps.payment * ps.pass[6]
+      return rs      
+end
+
+pred_xs = reconstruct_1(xs[1], ps)
+@show DataFrame(:Observed => xs, :Predicted => pred_xs )
+
+pred_ys = reconstruct_2(ys[1], ps)
+@show DataFrame(:Observed => ys, :Predicted => pred_ys)
